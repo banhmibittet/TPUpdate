@@ -1,0 +1,459 @@
+var isTask = false;
+class DOMObserver {
+    constructor(selectors, callback) {
+        this.selectors = selectors;
+        this.callback = callback;
+
+        this.observer = new MutationObserver(this.handleMutation.bind(this));
+        this.startObserving();
+    }
+    startObserving() {
+        this.observer.observe(document.body, { childList: true, subtree: true });
+    }
+    stopObserving() {
+        this.observer.disconnect();
+    }
+    handleMutation(mutations) {
+        mutations.forEach((mutation) => {
+            const addedNodes = Array.from(mutation.addedNodes);
+            const removedNodes = Array.from(mutation.removedNodes);
+            addedNodes.forEach((node) => {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    this.selectors.forEach((selector) => {
+                        if (node.matches(selector)) {
+                            this.callback(selector, [node]);
+                        } else {
+                            const elements = Array.from(node.querySelectorAll(selector));
+                            if (elements.length > 0) {
+                                this.callback(selector, elements);
+                            }
+                        }
+                    });
+                }
+            });
+        });
+    }
+
+
+}
+
+const selectorsToCheck = ['button[aria-describedby="descriptionVerify"]', 'p[aria-label*="Working, please wait" i ]', 'button[data-theme="home.verifyButton"]', ".error .button", "#wrongTimeout_children_button", 'button[id="home_children_button"]'];
+const observer = new DOMObserver(selectorsToCheck, async (selector, elements) => {
+
+    if (isTask) {
+        return;
+    }
+    if (API_TOKEN != "", API_TOKEN != "YOU_API_TOKEN") {
+        chrome.storage.local.set({ "apiToken": API_TOKEN ?? "" }, function () {
+        });
+    }
+
+    chrome.storage.local.get("apiToken", function (result) {
+        const apiToken = result.apiToken;
+        if (apiToken) {
+            API_TOKEN = apiToken;
+        }
+    });
+    await delay(300)
+    if (findElementInArray(['div[class*="error box screen"]'])) {
+        if (LOOP) {
+            clickContent('div[class*="error box screen"] button', 'Reload Challenge')
+        }
+        return;
+    }
+    isTask = true;
+    const verifyButton = findElementInArray(['button[data-theme="home.verifyButton"]', 'button[id="home_children_button"]', 'button[aria-describedby="descriptionVerify"]'], 10000);
+    if (!verifyButton) {
+        isTask = false;
+        return
+    };
+    verifyButton.click();
+    waitForAnyElement(["#game_children_text", ".challenge-instructions-container", ".match-game .text"], 10000)
+        .then((elementExists) => {
+            if (!elementExists) {
+                isTask = false;
+                return
+            };
+            if (findElement('.challenge-instructions-container')) {
+                captchaClikImage1();
+            } else if (findElement('.match-game .text')) {
+                captchaClikButton();
+            } else if (findElement('#game_children_text')) {
+                captchaClikImage2();
+            }
+            isTask = false;
+        });
+});
+
+async function captchaClikImage1() {
+    var textCaptcha = getTextContentOfElement('.challenge-instructions-container');
+    if (textCaptcha == null) return;
+    textCaptcha = textCaptcha.trim();
+    if(DELAY_CLICK < 1000){
+        DELAY_CLICK = 1000;
+    }
+    console.log("Câu hỏi captcha 1 :", textCaptcha);
+    var urlImage = "";
+    for (var i = 0; i < 500; i++) {
+        if (findElementInArray(['div[class*="tile-game-fail box screen"]', 'div[class*="match-game-fail box screen"]'])) {
+            if (LOOP) {
+                document.querySelector('button[aria-label="Restart" i]').click()
+            }
+            console.log("Giải captcha thất bại");
+            return;
+        }
+        if (findElementInArray(['div[class*="error box screen"]'])) {
+            if (LOOP) {
+                clickContent('div[class*="error box screen"] button', 'Reload Challenge')
+            }
+            console.log("Giải captcha thất bại");
+            return;
+        }
+        if (findElementInArray(['div[class*="victory box screen"]'])) {
+            console.log("Giải captcha thành công");
+            return;
+        }
+        const inputString = document.querySelector("body").innerHTML;
+        const regex = /blob:https:\/\/(.*?)\.arkoselabs\.com\/[a-zA-Z0-9-]+/;
+        const match = inputString.match(regex);
+        if (!match) {
+            await delay(500)
+            continue
+        };
+        if (urlImage == match[0]) {
+            await delay(500)
+            continue
+        };
+        urlImage = match[0];
+        const imageBase64 = await fetchAndConvertToBase64(urlImage);
+        const job_id = await createJob(imageBase64, textCaptcha);
+        if (job_id == "") {
+            if (LOOP) {
+                document.querySelector('button[aria-label="Restart" i]').click()
+            }
+            return
+        }
+        const result = await getJobResult(job_id, 10);
+        if (result == "Server 500") {
+            urlImage = "";
+            continue;
+        } else if (result == "") {
+            if (LOOP) {
+                document.querySelector('button[aria-label="Restart" i]').click();
+            }
+            return
+        }
+        console.log("Click ảnh:", result);
+        document.querySelector('button[aria-label*="Image ' + result + '"]').click()
+        await delay(DELAY_CLICK)
+    }
+}
+
+async function captchaClikImage2() {
+    var textCaptcha = getTextContentOfElement('#game_children_text');
+    if (textCaptcha == null) return;
+    textCaptcha = textCaptcha.trim();
+    if (textCaptcha.endsWith('.')) {
+        textCaptcha = textCaptcha.slice(0, -1);
+    }
+    if(DELAY_CLICK < 1000){
+        DELAY_CLICK = 1000;
+    }
+    console.log("Câu hỏi captcha 2:", textCaptcha);
+    var urlImage = "";
+
+    for (var i = 0; i < 500; i++) {
+        if (findElementInArray(['div[class*="tile-game-fail box screen"]', 'div[class*="match-game-fail box screen"]'])) {
+            if (LOOP) {
+                document.querySelector('a[aria-label="Start over with a different challenge" i]').click();
+            }
+            console.log("Giải captcha thất bại");
+            return;
+        }
+        if (findElementInArray(['div[class*="error box screen"]'])) {
+            if (LOOP) {
+                clickContent('div[class*="error box screen"] button', 'Reload Challenge')
+            }
+            console.log("Giải captcha thất bại");
+            return;
+        }
+        if (findElementInArray(['div[class*="victory box screen"]'])) {
+            console.log("Giải captcha thành công");
+            return;
+        }
+        var imageBase64 = "";
+        if (findElementInArray(['#game_challengeItem_image'])) {
+            imageBase64 = document.querySelector("#game_challengeItem_image").src;
+        } else {
+            const inputString = document.querySelector("body").innerHTML;
+            const regex = /blob:https:\/\/(.*?)\.arkoselabs\.com\/[a-zA-Z0-9-]+/;
+            const match = inputString.match(regex);
+            if (!match) {
+                await delay(500)
+                continue
+            };
+            if (urlImage == match[0]) {
+                await delay(500)
+                continue
+            };
+            urlImage = match[0];
+            imageBase64 = await fetchAndConvertToBase64(urlImage);
+        }
+        const job_id = await createJob(imageBase64, textCaptcha);
+        if (job_id == "") {
+            if (LOOP) {
+                document.querySelector('a[aria-label="Start over with a different challenge" i]').click();
+            }
+            return
+        }
+        const result = await getJobResult(job_id, 20);
+        if (result == "Server 500") {
+            urlImage = "";
+            continue;
+        } else if (result == "") {
+            if (LOOP) {
+                document.querySelector('a[aria-label="Start over with a different challenge" i]').click();
+            }
+            return
+        }
+        console.log("Click ảnh:", result);
+        if (findElementInArray(['[aria-label*="Image ' + result + '" i]'], 1000)) {
+            document.querySelector('[aria-label*="Image ' + result + '" i]').click()
+        }
+        await delay(DELAY_CLICK)
+    }
+}
+
+async function captchaClikButton() {
+    var textCaptcha = getTextContentOfElement('.match-game .text');
+    if (textCaptcha == null) return;
+    textCaptcha = textCaptcha.split('(')[0].trim();
+    if (textCaptcha.endsWith('.')) {
+        textCaptcha = textCaptcha.slice(0, -1);
+    }
+    console.log("Câu hỏi captcha 3:", textCaptcha);
+    var urlImage = "";
+    for (var i = 0; i < 500; i++) {
+        if (findElementInArray(['div[class*="tile-game-fail box screen"]', 'div[class*="match-game-fail box screen"]'])) {
+            if (LOOP) {
+                document.querySelector('button[aria-label="Restart" i]').click()
+            }
+            console.log("Giải captcha thất bại");
+            return;
+        }
+        if (findElementInArray(['div[class*="error box screen"]'])) {
+            if (LOOP) {
+                clickContent('div[class*="error box screen"] button', 'Reload Challenge')
+            }
+            console.log("Giải captcha thất bại");
+            return;
+        }
+        if (findElementInArray(['div[class*="victory box screen"]'])) {
+            console.log("Giải captcha thành công");
+            return;
+        }
+        const inputString = document.querySelector("body").innerHTML;
+        const regex = /blob:https:\/\/(.*?)\.arkoselabs\.com\/[a-zA-Z0-9-]+/;
+        const match = inputString.match(regex);
+        if (!match) {
+            await delay(500)
+            continue
+        };
+        if (urlImage == match[0]) {
+            await delay(500)
+            continue
+        };
+        urlImage = match[0];
+        const imageBase64 = await fetchAndConvertToBase64(urlImage);
+        const job_id = await createJob(imageBase64, textCaptcha);
+        if (job_id == "") {
+            if (LOOP) {
+                document.querySelector('button[aria-label="Restart" i]').click()
+            }
+            return
+        }
+        const result = await getJobResult(job_id, 10);
+        console.log("result", result);
+        if (result == "Server 500") {
+            urlImage = "";
+            continue;
+        } else if (result == "") {
+            if (LOOP) {
+                document.querySelector('button[aria-label="Restart" i]').click()
+            }
+            return
+        }
+        let conutClick = parseInt(result, 10);
+        conutClick = conutClick - 1;
+        if (conutClick > 30) {
+            if (LOOP) {
+                document.querySelector('button[aria-label="Restart" i]').click()
+            }
+            console.log("Giải captcha thất bại");
+            return;
+        }
+        for (var j = 0; j < conutClick; j++) {
+            if (j > 0) {
+                await delay(DELAY_CLICK)
+            }
+            document.querySelector('a[aria-label="Navigate to next image" i]').click()
+        }
+        await delay(500)
+        clickContent('div[class*="match-game box screen"] button', "Submit")
+        if (conutClick == 0) {
+            await delay(DELAY_CLICK)
+        }
+    }
+}
+
+async function findElementInArray(selectors, timeout) {
+    const startTime = Date.now();
+
+    while (true) {
+        try {
+            for (const selector of selectors) {
+                const element = document.querySelector(selector);
+                if (element) {
+                    return element;
+                }
+            }
+
+            const currentTime = Date.now();
+            if (currentTime - startTime >= timeout) {
+                throw new Error("Timeout: Element not found within specified time");
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (error) {
+            console.error("Error in findElementInArrayWithTimeout:", error.message);
+        }
+    }
+}
+
+function findElementInArray(selectors) {
+    for (const selector of selectors) {
+        const element = document.querySelector(selector);
+        if (element) {
+            return element;
+        }
+    }
+    return null;
+}
+
+function findElement(selector) {
+    const element = document.querySelector(selector);
+    if (element) {
+        return true;
+    }
+    return false;
+}
+
+function waitForAnyElement(selectors, timeout) {
+    return new Promise((resolve) => {
+        const intervalId = setInterval(() => {
+            for (const selector of selectors) {
+                const element = document.querySelector(selector);
+                if (element) {
+                    clearInterval(intervalId);
+                    resolve(true);
+                    return;
+                }
+            }
+
+            timeout -= 1000;
+
+            if (timeout <= 0) {
+                clearInterval(intervalId);
+                resolve(false);
+            }
+        }, 500);
+    });
+}
+
+function getTextContentOfElement(selector) {
+    const element = document.querySelector(selector);
+    if (element) {
+        return element.textContent.trim();
+    } else {
+        return null;
+    }
+}
+
+function clickContent(selector, text) {
+    const elements = document.querySelectorAll(selector);
+    for (var i = 0; i < elements.length; i++) {
+        var element = elements[i];
+        if (element.textContent.includes(text)) {
+            element.click();
+            return;
+        }
+    }
+
+}
+
+async function fetchAndConvertToBase64(url) {
+    try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64Data = reader.result.split(',')[1];
+                resolve(base64Data);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    } catch (error) {
+        console.error('Error fetching and converting to base64:', error);
+        return null;
+    }
+}
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function createJob(imageBase64, text) {
+    return new Promise((resolve, reject) => {
+        try {
+            const data = JSON.stringify({
+                api_token: API_TOKEN,
+                data: {
+                    type_job_id: 45,
+                    image_base64: imageBase64,
+                    text: text
+                }
+            });
+            chrome.runtime.sendMessage({type: "createJob", data: data}, function(response) {
+                if (chrome.runtime.lastError) {
+                    resolve("");
+                } else {
+                    resolve(response);
+                }
+            });
+        } catch{
+            resolve("");
+        }
+    });
+}
+
+async function getJobResult(jobId, timeWait) {
+    return new Promise((resolve, reject) => {
+        try {
+            const data = JSON.stringify({
+                api_token: API_TOKEN,
+                job_id: jobId
+            });
+            chrome.runtime.sendMessage({type: "getJobResult", data: data, timeWait: timeWait}, function(response) {
+                if (chrome.runtime.lastError) {
+                    resolve("");
+                } else {
+                    resolve(response);
+                }
+            });
+        } catch {
+            resolve("");
+        }
+    });
+}
