@@ -1,0 +1,19 @@
+if(API_TOKEN != "" && API_TOKEN != "YOU_API_TOKEN"){
+    chrome.storage.local.set({ "apiToken": API_TOKEN }, function() {
+    });
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    const apiTokenInput = document.getElementById("apiToken");
+    chrome.storage.local.get("apiToken", function(result) {
+        const apiToken = result.apiToken;
+        if (apiToken) {
+            apiTokenInput.value = apiToken;
+        }
+    });
+    apiTokenInput.addEventListener("input", function() {
+        const apiToken = apiTokenInput.value.trim();
+        chrome.storage.local.set({ "apiToken": apiToken ?? "" }, function() {
+        });
+    });
+});
