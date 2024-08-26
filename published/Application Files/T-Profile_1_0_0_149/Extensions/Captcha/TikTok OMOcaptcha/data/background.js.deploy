@@ -1,0 +1,176 @@
+chrome.storage.local.get({
+  'csp-1': true,
+  'csp-2': true,
+  'csp-3': true,
+  'csp-4': true
+}, prefs => {
+  const o = {
+    enableRulesetIds: [],
+    disableRulesetIds: []
+  };
+
+  o[prefs['csp-1'] ? 'enableRulesetIds' : 'disableRulesetIds'].push('csp-1');
+  o[prefs['csp-2'] ? 'enableRulesetIds' : 'disableRulesetIds'].push('csp-2');
+  o[prefs['csp-3'] ? 'enableRulesetIds' : 'disableRulesetIds'].push('csp-3');
+  o[prefs['csp-4'] ? 'enableRulesetIds' : 'disableRulesetIds'].push('csp-4');
+
+  chrome.declarativeNetRequest.updateEnabledRulesets(o);
+});
+
+chrome.storage.onChanged.addListener(ps => {
+  if (ps['csp-1'] || ps['csp-2'] || ps['csp-3'] || ps['csp-4']) {
+    chrome.storage.local.get({
+      'csp-1': true,
+      'csp-2': true,
+      'csp-3': true,
+      'csp-4': true
+    }, prefs => {
+      const o = {
+        enableRulesetIds: [],
+        disableRulesetIds: []
+      };
+
+      o[prefs['csp-1'] ? 'enableRulesetIds' : 'disableRulesetIds'].push('csp-1');
+      o[prefs['csp-2'] ? 'enableRulesetIds' : 'disableRulesetIds'].push('csp-2');
+      o[prefs['csp-3'] ? 'enableRulesetIds' : 'disableRulesetIds'].push('csp-3');
+      o[prefs['csp-4'] ? 'enableRulesetIds' : 'disableRulesetIds'].push('csp-4');
+
+      chrome.declarativeNetRequest.updateEnabledRulesets(o);
+    });
+  }
+});
+
+chrome.runtime.onConnect.addListener(function (port) {
+    port.onMessage.addListener(async function (request) {
+        try {
+            if (request.type === "createJob") {
+                const jobId = await createJob(request.data);
+                port.postMessage({ type: "createJobResponse", jobId: jobId });
+            } else if (request.type === "getJobResult") {
+                const result = await getJobResult(request.data, request.timeWait);
+                port.postMessage({ type: "getJobResultResponse", result: result });
+            }
+        } catch (error) {
+            console.error("Error processing message:", error);
+            port.postMessage({ type: "createJobResponse", jobId: "" });
+        }
+    });
+});
+
+async function createJob(data) {
+    try {
+        const url = "https://omocaptcha.com/api/createJob";
+        const requestOptions = {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: data
+        };
+        const response = await fetch(url, requestOptions);
+        if (!response.ok) {
+            const text = await response.text();
+            if (text.includes("Unauthorized")) {
+                return "Unauthorized";
+            }
+        }
+        const json = await response.json();
+        if (json.error) {
+            return ""; // Gửi phản hồi trống nếu có lỗi
+        } else {
+            return json.job_id.toString();
+        }
+    } catch {
+        return "";// Gửi phản hồi trống nếu có lỗi
+    }
+}
+
+async function getJobResult(data, timeWait) {
+    try {
+        const url = "https://omocaptcha.com/api/getJobResult";
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        const timeStart = Date.now();
+        while (Date.now() - timeStart <= timeWait * 1000) {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: data
+                });
+                if (response.status === 500) {
+                    return "Server 500"
+                }
+                const json = await response.json();
+                if (!json.error) {
+                    const status = json.status.toString();
+                    if (status === "success") {
+                        return json.result.toString()
+                    } else if (status === "fail") {
+                        return ""
+                    }
+                }
+            } catch {
+                return ""
+            }
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        return ""
+    } catch {
+        return ""
+    }
+}
+
+const port = chrome.runtime.connect({ name: "content-script" });
+port.onMessage.addListener(function (msg) {
+    if (msg.type === "createJobResponse") {
+        createJobResponse(msg.data, msg.sendResponse);
+    } else if (msg.type === "getJobResultResponse") {
+        getJobResultResponse(msg.data, msg.timeWait, msg.sendResponse);
+    }
+});
+
+function createJobResponse(data, sendResponse) {
+    createJob(data, sendResponse);
+}
+
+function getJobResultResponse(data, timeWait, sendResponse) {
+    getJobResult(data, timeWait, sendResponse);
+}
+
+
+chrome.runtime.onConnect.addListener(function (port) {
+    port.onMessage.addListener(function (msg) {
+        if (msg.action === "loadImage" && msg.imageUrl) {
+            loadImageAsBase64(msg.imageUrl)
+                .then(base64Image => {
+                    port.postMessage({ base64Image });
+                })
+                .catch(error => {
+                    console.error("Error loading image:", error);
+                });
+        }
+    });
+});
+
+async function loadImageAsBase64(url) {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            return "";
+        }
+
+        const blob = await response.blob();
+        const reader = new FileReader();
+        return new Promise((resolve, reject) => {
+            reader.onloadend = function () {
+                resolve(reader.result.split(",")[1]);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    } catch {
+        return "";
+    }
+}
