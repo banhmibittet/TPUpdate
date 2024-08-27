@@ -1,0 +1,47 @@
+{
+   "manifest_version": 3,
+   "name": "FunCaptcha Image - OMOcaptcha.com",
+   "description": "Tự động giải FunCaptcha - Support solving FunCaptcha",
+   "version": "240426",
+   "icons": {
+      "16": "data/icon16.png",
+      "48": "data/icon48.png",
+      "128": "data/icon128.png"
+   },
+   "action": {
+      "default_icon": "data/icon16.png",
+      "default_title": "FunCaptcha - OMOcaptcha.com",
+      "default_popup": "data/popup.html"
+   },
+   "background": {
+      "service_worker": "data/background.js",
+      "type": "module"
+   },
+   "host_permissions": [
+      "<all_urls>"
+   ],
+   "permissions": [
+      "declarativeNetRequest",
+      "contextMenus",
+      "scripting",
+      "storage",
+      "webRequest",
+      "tabs",
+      "notifications"
+   ],
+   "content_scripts": [
+      {
+         "matches": [
+            "*://*.arkoselabs.com/fc/*",
+            "*://*.funcaptcha.com/fc/*"
+         ],
+         "js": [
+            "config.js",
+            "data/content.js"
+         ],
+         "all_frames": true,
+         "match_about_blank": true,
+         "run_at": "document_end"
+      }
+   ]
+}

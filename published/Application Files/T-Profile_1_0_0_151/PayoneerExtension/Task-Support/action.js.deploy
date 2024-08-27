@@ -1,0 +1,1838 @@
+async function logMail() {
+  return await executeWithRetry(async () => {
+    let count = 0;
+    while (true) {
+      await fetchSendTextBrowserReal('google.com/?hl=en');
+
+      console.log('logMail');
+      if (await fetchFindElement('[href*="accounts.google.com/SignOutOptions"]')) {
+        console.log('mail logged');
+        return true;
+      }
+      console.log('mail not logged');
+      await fetchClickReal('[href*="accounts.google.com/ServiceLogin"]');
+      console.log('send id : ' + profile.ID);
+      await fetchSendTextReal('#identifierId', profile.ID);
+      if (
+        (await fetchClickReal('#identifierNext > div > button', 1)) ||
+        (await fetchClickReal(`[data-email='${profile.ID}']`, 1))
+      ) {
+        console.log('send pass : ' + profile.Pass);
+        await fetchSendTextReal('#password > div:nth-child(1) > div > div:nth-child(1) > input', profile.Pass);
+        await fetchClickReal('#passwordNext > div > button');
+        await delay(5000);
+
+        console.log('Try another way');
+        await fetchClickByTextReal('button', 'Try another way');
+
+        if ((await fetchClickByTextReal('div', 'Confirm your recovery email',))) {
+          console.log('Confirm your recovery email : ' + profile.Recovery);
+          await fetchSendTextReal('input[aria-label="Enter recovery email address"]', profile.Recovery, 30000);
+          await fetchClickByTextReal('span', 'Next');
+        } else if ((await fetchClickByTextReal('div', 'Confirm your recovery phone number', 1000))) {
+          console.log('Confirm your recovery phone number : ' + profile.Recovery);
+          await fetchSendTextReal('#phoneNumberId', profile.Recovery, 30000);
+          await fetchClickByTextReal('span', 'Next');
+        } else if ((await fetchClickByTextReal('div', 'Get a verification code from the', 1000))) {
+          console.log('Get a verification code from the : ' + profile.Recovery);
+          let PIN2FA = await fetchOtp(profile.Recovery);
+          await fetchSendTextReal('input[aria-label="Enter code"]', PIN2FA, 30000);
+          await fetchClickByTextReal('span', 'Next');
+        }
+
+        await fetchClickReal('#confirm');
+        await fetchClickReal('body > div:nth-child(1) > div:nth-child(2) > div:nth-child(2) > form > span > input:nth-child(9)', 5000);
+        await fetchClickByTextReal('span', 'Not now');
+      }
+      count++;
+      if (count > 1) {
+        console.log('logMail false');
+        return false;
+      }
+    }
+  }, 'logMail');
+}
+
+async function checkLanguage() {
+  return await executeWithRetry(async () => {
+    while (true) {
+      //await fetchNavigate('https://myaccount.google.com/personal-info?hl=en', true);
+      await fetchSendTextBrowserReal('myaccount.google.com/personal-info?hl=en');
+
+      console.log('checkLanguage');
+
+      await fetchClickReal('[role="button"][aria-label="Back"]', 5000);
+      if ((await fetchFindElementByText('div', 'English (United States)', 2000))) {
+        return true;
+      }
+      await fetchClickReal('a[aria-label="Language"]');
+      //await simulateClickByText('*','Select a language',1);
+      await fetchClickReal('button[aria-label*="Edit language"]');
+      if (!(await fetchClickReal('li[aria-label="English"]', 5))) {
+        await fetchSendTextReal('input[aria-label*="Enter language"]', 'English');
+        await fetchClickByTextReal('span', 'English');
+        await fetchClickReal('li[aria-label="United States"]', null, '.k1a2c');
+        await fetchClickReal('button[aria-label="Select your language"]:nth-child(2)', 2000);
+        await fetchClickReal('button[aria-label="Select your language"]', 2000);
+        await fetchClickReal('button[aria-label="Save your language selection"]', 2000);
+      }
+    }
+  }, 'checkLanguage');
+}
+
+function getNews() {
+  let countries = ["vietnam", "america", "german", "japan", "canada", "china", "russia", "singapore", "latest", "game", "sports", "song"];
+  let keyword = `${randomPickInArray(countries)} news`;
+  return keyword;
+}
+
+function getHowto() {
+  let verbs = ["live", "play", "draw", "ask", "listen", "hear", "sleep", "run", "jogging", "jump", "swim", "shoot", "look", "stare", "dodge", "write", "cook", "code", "sing", "study", "speak", "build", "eat", "edit", "walk", "dance", "plan", "laugh"];
+  let adverbs = ["calm", "better", "good", "well", "clean", "careful", "nicely", "rapidly", "rapid", "easily", "easy", "daily", "peaceful"];
+  let plus = ["with", "without"];
+  let nouns = ["dog", "my dog", "friend", "my friend", "family", "my family", "our family", "our friend", "our dog", "cat", "our cat", "my cat"];
+
+  let verb = randomPickInArray(verbs);
+  let adverb = randomPickInArray(adverbs);
+  let plusWord = randomPickInArray(plus);
+  let noun = randomPickInArray(nouns);
+
+  let keyword = `how to ${verb} ${adverb} ${plusWord} ${noun}`;
+  return keyword;
+}
+
+async function getCPC() {
+  let fetchedCampaign = await fetchCampaign();
+  if (fetchedCampaign) {
+    let cpcList = fetchedCampaign.CPCPool.split('\n').map(item => item.trim());
+    let keyword = randomPickInArray(cpcList);
+    return keyword;
+  }
+}
+
+// Define an array of functions to randomly choose from
+let viewFunctions = [getNews, getHowto, getCPC];
+
+async function randomAction() {
+  // Create a copy of the viewFunctions array to work with
+  let availableActions = viewFunctions.slice();
+  let loop = random(1, 2);
+  for (let index = 0; index < loop; index++) {
+
+    console.log('randomAction');
+    if (availableActions.length === 0) {
+      break; // No more actions available, exit the loop
+    }
+
+    // Randomly select an action from the available actions
+    let randomViewFunction;
+    let keyword = null;
+    while (keyword === null) {
+      randomViewFunction = randomPickInArray(availableActions);
+      keyword = await randomViewFunction();
+    }
+
+    // Remove the selected action from the availableActions array
+    let actionIndex = availableActions.indexOf(randomViewFunction);
+    if (actionIndex !== -1) {
+      availableActions.splice(actionIndex, 1);
+    }
+
+    try {
+      // Search News Post
+      await searchPost(keyword);
+
+      // Choose Post
+      if (await choosePost()) {
+        // Read Post
+        await readPost();
+      }
+    } catch (error) {
+      // Do nothing
+    }
+  }
+}
+
+async function searchPost(keyword) {
+
+
+  //await fetchNavigate('https://www.google.com/?hl=en', true);
+  await fetchSendTextBrowserReal('google.com/?hl=en');
+
+  console.log('search post');
+
+  await fetchClickReal('#L2AGLb'); // click accept policy in some country
+  if (await fetchQuickScanElement('[aria-label="Stay signed out"]')) {
+    await fetchClickReal('[aria-label="Stay signed out"]');
+  }
+  if (await fetchQuickScanElement('[aria-label="No, thanks"]')) {
+    await fetchClickReal('[aria-label="No, thanks"]');
+  }
+
+  await fetchSendTextReal('textarea.gLFyf', keyword);
+  await fetchClickReal('.gNO89b');
+}
+
+async function choosePost() {
+
+  console.log('choose post');
+
+  return await fetchClickRandomReal('[class*="LC20lb MBeuO DKV0Md"]');
+}
+
+async function readPost() {
+  console.log('read post');
+  if (!(await waitForLoad())) {
+    console.log('read post fail');
+    return;
+  }
+  console.log('read post true');
+  let watchTime = 0;
+  let duration = random(3, 5);
+  while (watchTime < duration) {
+    let lastInteractionTime = Date.now();
+    await delayScroll();
+    watchTime += (Date.now() - lastInteractionTime) / 60000;
+  }
+}
+
+async function viewWeb() {
+  console.log('viewWeb');
+  let fetchedCampaign = await fetchCampaign();
+
+  //await fetchNavigate('https://www.google.com/?hl=en', true);
+  await fetchSendTextBrowserReal('google.com/?hl=en');
+
+  let isSearchGoogle = true;
+  let result = await searchWeb(isSearchGoogle);
+  while (!result) {
+    result = await searchWeb(isSearchGoogle);
+    await delay(5000);
+  }
+  isSearchGoogle = false;
+
+  let isViewAds = fetchedCampaign.isViewAds;
+
+  let from = fetchedCampaign.DurationFrom;
+  let to = fetchedCampaign.DurationTo;
+  let duration = random(from, to);
+
+  let changeClipFrom = fetchedCampaign.ChangeClipFrom;
+  let changeClipTo = fetchedCampaign.ChangeClipTo;
+  let randomChangeTime = random(changeClipFrom, changeClipTo);
+
+  let watchTime = 0;
+  let changePostCount = 0;
+  let changePostCountMax = random(1, 3);
+  let isFindAds;
+
+  while (watchTime < duration) {
+    console.log(watchTime);
+    let lastInteractionTime = Date.now();
+
+    await checkAcceptCookies();
+
+    if (watchTime > randomChangeTime) {
+      if (changePostCount > changePostCountMax) {
+        isSearchGoogle = true;
+        changePostCountMax = random(1, 3);
+      }
+
+      if (isViewAds && changePostCount == changePostCountMax) {
+        isFindAds = true;
+      }
+
+      let result = await searchWeb(isSearchGoogle, isFindAds);
+      while (!result) {
+        if (!isSearchGoogle) {
+          let currentUrl = await fetchGetCurrentUrl();
+          if (currentUrl.includes("www.google.com")) {
+            isSearchGoogle = true;
+            changePostCountMax = random(1, 3);
+          }
+        }
+        result = await searchWeb(isSearchGoogle, isFindAds);
+        await delay(5000);
+      }
+      randomChangeTime += random(changeClipFrom, changeClipTo);
+
+      if (isFindAds) {
+        isFindAds = false;
+        // TODO - check multiple page
+      }
+
+      if (isSearchGoogle) {
+        changePostCount = 0;
+        isSearchGoogle = false;
+      } else {
+        changePostCount++;
+      }
+    }
+
+    await delayScroll();
+
+    watchTime += (Date.now() - lastInteractionTime) / 60000;
+  }
+}
+
+async function uploadTiktok() {
+  console.log('uploadTiktok');
+
+
+
+  while (true) {
+    await fetchSendTextBrowserReal('tiktok.com');
+
+    if (await fetchQuickScanElementByText('#header-login-button', 'Log in')) {
+      return "OutTiktok";
+    }
+
+    await fetchClickByTextReal('[class="css-y3rt08-SpanUploadText e18d3d946"]', 'Upload');
+
+    if (await fetchClickByTextRealInFrame('iframe[src="https://www.tiktok.com/creator#/upload?scene=creator_center"]', '*', 'Feature unavailable', 1000, null, false)) {
+      return "Unavailable";
+    }
+
+    if (await fetchClickByTextRealInFrame('iframe[src="https://www.tiktok.com/creator#/upload?scene=creator_center"]', '*', 'Select file') ||
+      await fetchClickByTextRealInFrame('iframe[src="https://www.tiktok.com/creator#/upload?scene=creator_center"]', '*', 'select a file')
+    ) {
+      await delay(5000);
+      await fetchUploadVideoRandomReal();
+      break;
+    }
+  }
+
+  while (true) {
+    if (await fetchClickByTextRealInFrame('iframe[src="https://www.tiktok.com/creator#/upload?scene=creator_center"]', '[class="css-ug6w5y"]', 'Edit video')) {
+      break;
+    }
+
+    if (await fetchClickByTextRealInFrame('iframe[src="https://www.tiktok.com/creator#/upload?scene=creator_center"]', '*', 'Select file') ||
+      await fetchClickByTextRealInFrame('iframe[src="https://www.tiktok.com/creator#/upload?scene=creator_center"]', '*', 'select a file')
+    ) {
+      await delay(5000);
+      await fetchUploadVideoRandomReal();
+    }
+  }
+
+
+  let result;
+  await delay(5000);
+  do {
+    result = await searchMusic();
+    await delay(5000);
+  } while (!result);
+
+  await fetchClickByTextRealInFrame('iframe[src="https://www.tiktok.com/creator#/upload?scene=creator_center"]', '[class="css-y1m958"]', 'Post');
+
+  await fetchCountUsedMusic(result);
+
+  return "Success";
+}
+
+async function checkAcceptCookies() {
+  try {
+    console.log('checkAcceptCookies');
+    if (await fetchQuickScanElement('.cky-notice-btn-wrapper > [aria-label="Accept All"]')) {
+      await fetchClickReal('.cky-notice-btn-wrapper > [aria-label="Accept All"]');
+    }
+  } catch (error) {
+    console.error('checkAcceptCookies failed: ' + error);
+  }
+}
+
+async function checkPreciseLocation() {
+  try {
+    console.log('checkPreciseLocation');
+    if (await fetchQuickScanElementByText('span', 'See results closer to you?')) {
+      await fetchClickByTextReal('*', 'recise location');
+      await fetchClickByTextReal('div.GZ2dib.sjVJQd', 'Continue');
+    }
+  } catch (error) {
+    console.error('checkPreciseLocation failed: ' + error);
+  }
+}
+
+async function checkStaySignOut() {
+  try {
+    console.log('checkStaySignOut');
+    if (await fetchQuickScanElementByText('span', 'Stay signed out')) {
+      await fetchClickByTextReal('span', 'Stay signed out');
+    }
+  } catch (error) {
+    console.error('checkStaySignOut failed: ' + error);
+  }
+}
+
+async function searchWeb(isSearchGoogle, isFindAds = false) {
+  let fetchedCampaign = await fetchCampaign();
+
+  try {
+    if (isFindAds) {
+      // TODO - click shadow ads
+    }
+
+    let socialPercent = fetchedCampaign.SocialPercent;
+    let shortPercent = fetchedCampaign.ShortPercent;
+    let suggestPercent = fetchedCampaign.SuggestPercent;
+    let percentFluctuation = fetchedCampaign.PercentFluctuation;
+    let webList = fetchedCampaign.WebPool.split('\n').map(item => item.trim());
+    let socialList = fetchedCampaign.SocialPool.split('\n').map(item => item.trim());
+    let shopList = fetchedCampaign.ShopPool.split('\n').map(item => item.trim());
+    let shortList = fetchedCampaign.ShortPool.split('\n').map(item => item.trim());
+
+    let web = randomPickInArray(webList);
+    let [webName, postName, link] = web.split(';').map((item) => item.trim());
+
+    if (!isSearchGoogle) {
+      let currentUrl = await fetchGetCurrentUrl();
+      currentUrl = currentUrl.match(/(?<=https:\/\/).*?(?=\/)/)[0];
+      // Check if currentUrl is present in socialList, shopList, or shortList
+      if (socialList.some(url => url.includes(currentUrl)) ||
+        shopList.some(url => url.includes(currentUrl)) ||
+        shortList.some(url => url.includes(currentUrl))) {
+        // Do nothing if currentUrl is present in any list
+        await fetchNavigate(link, true);
+        return link;
+      } else {
+        webList = webList.filter(x => x.includes(currentUrl));
+      }
+    }
+
+    web = randomPickInArray(webList);
+    [webName, postName, link] = web.split(';').map((item) => item.trim());
+
+    let nameArray = postName.split(' ');
+    let startIndex = 0;
+    let endIndex = random(nameArray.length / 4, nameArray.length / 3);
+    let nameModified = nameArray.slice(startIndex, endIndex).join(' ');
+    let keyword = webName + ' ' + postName;
+
+    // Search post in same page
+    if (!isSearchGoogle) {
+      console.log("searchWeb_SearchPostInSamePage");
+      let clss = await checkWebPostElement();
+      let actionIndex = [];
+      if (await fetchQuickScanElement('[class*="wp-block-search__input"]')) {
+        actionIndex.push(0);
+      }
+      if (await fetchQuickScanElement('.ramdom-post a')) {
+        actionIndex.push(1);
+      }
+      if (clss && (await fetchQuickScanElement(`${clss} a`))) {
+        actionIndex.push(2);
+      }
+      if (await fetchQuickScanElement('.fa.fa-search')) {
+        actionIndex.push(3);
+      }
+      if (await fetchQuickScanElement('.display-random-post a')) {
+        actionIndex.push(4);
+      }
+      if (await fetchQuickScanElement('.spnc-toggle')) {
+        actionIndex.push(5);
+      }
+
+      if (actionIndex.length > 0) {
+        switch (randomPickInArray(actionIndex)) {
+          case 0:
+            // Search post in same page
+            await fetchSendTextReal('.wp-block-search__input', nameModified);
+            await fetchClickReal('.wp-block-search__button.wp-element-button');
+            // Scan post after search
+            clss = await checkWebPostElement();
+
+            //await fetchClickRandom(`${clss} a`);
+            await fetchClickRandomReal(`${clss} a`);
+            break;
+          case 1:
+            await fetchClickReal('.ramdom-post a'); // Click random post button
+            break;
+          case 2:
+            // Scan suggest post after read
+            clss = await checkWebPostElement();
+
+            //await fetchClickRandom(`${clss} a`);
+            await fetchClickRandomReal(`${clss} a`);
+            break;
+          case 3:
+            // Search post in same page
+            await fetchClickReal('.fa.fa-search'); // Click to show hidden search box
+
+            await fetchSendTextReal('[type="search"]', nameModified);
+            await fetchClickReal('[type="submit"].search');
+            // Scan post after search
+            clss = await checkWebPostElement();
+
+            //await fetchClickRandom(`${clss} a`);
+            await fetchClickRandomReal(`${clss} a`);
+            break;
+          case 4:
+            await fetchClickReal('.display-random-post a'); // Click random post button
+            break;
+          case 5:
+            // Search post in same page
+            if (await fetchQuickScanElement('.collapse.spnc-collapse')) {
+              await fetchClickReal('.spnc-toggle'); // Click to show hidden search box
+            }
+            await fetchClickReal('.search-icon'); // Click to show hidden search box
+            await fetchSendTextReal('.search-field', nameModified);
+            await fetchClickReal('.search-submit.btn');
+            // Scan post after search
+            clss = await checkWebPostElement();
+
+            //await fetchClickRandom(`${clss} a`);
+            await fetchClickRandomReal(`${clss} a`);
+            break;
+          default:
+            break;
+        }
+        console.log('Same page');
+        return link;
+      }
+    }
+
+    // Search google
+    console.log("searchWeb_SearchGoogle");
+    await searchPost(keyword);
+    let hrefs = await fetchGetHrefElements('[jsname*="UWckNb"]'); // get href of visible posts
+    hrefs = MinusMainPage(hrefs);
+    // Scan all visible post which exist in the pool
+    let browseList = webList.filter(webItem => {
+      // Check if webItem contains any of the hrefs
+      return hrefs.some(href => webItem.includes(href));
+    });
+
+    if (browseList.length > 0) {
+      while (true) {
+        console.log("searchWeb_ClickAfterSearch");
+        await checkStaySignOut();
+        await checkPreciseLocation();
+        web = randomPickInArray(browseList);
+        [webName, postName, link] = web.split(';').map((item) => item.trim());
+        await fetchClickReal(`[jsname="UWckNb"][href*="${link}"] > h3`);
+
+        let currentUrl = await fetchGetCurrentUrl();
+        if (!currentUrl.includes("www.google.com")) {
+          console.log('Search');
+          return link;
+        }
+      }
+    }
+    // Navigate reference if not found search
+    let isNavigateReference = randomRoll() < clamp(random(suggestPercent - percentFluctuation, suggestPercent + percentFluctuation), 0, 100);
+    if (isNavigateReference) {
+      console.log("searchWeb_NavigateReference");
+      let subLink = randomPickInArray(socialList);
+
+      let percentRandomSocial = clamp(random(socialPercent - percentFluctuation, socialPercent + percentFluctuation), 0, 100);
+      let percentRandomShort = clamp(random(shortPercent - percentFluctuation, shortPercent + percentFluctuation), 0, 100);
+      percentRandomShort = clamp(percentRandomSocial + percentRandomShort, 0, 100);
+      let randomResult = randomRoll();
+      if (randomResult <= percentRandomSocial) {
+        subLink = randomPickInArray(socialList).trim();
+        console.log('Social');
+      } else if (randomResult > percentRandomSocial && randomResult <= percentRandomShort) {
+        subLink = randomPickInArray(shortList).trim();
+        console.log('Short');
+      } else {
+        subLink = randomPickInArray(shopList).trim();
+        console.log('Shop');
+      }
+
+      await fetchNavigate(subLink, true);
+      await fetchNavigate(link, true);
+      return link;
+    }
+  } catch (error) {
+    console.error('An error occurred:' + error);
+  }
+  return null;
+}
+
+function MinusMainPage(urlArray) {
+
+  // Create the urlsToRemove array by extracting unique domains and mapping to full URLs
+  let urlsToRemove = [...new Set(urlArray.map(url => new URL(url).hostname))]
+    .map(domain => `https://${domain}/`);
+
+  // Use the filter method to create a new array with URLs not in the urlsToRemove array
+  let filteredUrls = urlArray.filter(url => !urlsToRemove.includes(url));
+
+  return filteredUrls;
+}
+
+async function viewYoutube() {
+  console.log('viewYoutube');
+  let fetchedCampaign = await fetchCampaign();
+  let youtubeList = fetchedCampaign.YoutubePool.split('\n').map(item => item.trim());
+  let isLike = fetchedCampaign.isLike;
+  let isComment = fetchedCampaign.isComment;
+  let commentPool = fetchedCampaign.CommentPool.split('\n').map(item => item.trim());
+  let likePercent = fetchedCampaign.LikePercent;
+  let commentPercent = fetchedCampaign.CommentPercent;
+  //let isSubTab = fetchedCampaign.isSubTab;
+
+
+  //await fetchNavigate('https://www.youtube.com/?hl=en', true);
+  await fetchSendTextBrowserReal('youtube.com/?hl=en');
+  if (!(await changeVideo())) {
+    return;
+  }
+
+  // if (isSubTab) {
+  //   await subTabInit();
+  // }
+
+  let from = fetchedCampaign.DurationFrom;
+  let to = fetchedCampaign.DurationTo;
+  let duration = random(from, to);
+
+  let changeClipFrom = fetchedCampaign.ChangeClipFrom;
+  let changeClipTo = fetchedCampaign.ChangeClipTo;
+  let randomChangeTime = random(changeClipFrom, changeClipTo);
+
+  let watchTime = 0;
+
+  while (watchTime < duration) {
+    console.log(watchTime);
+    let lastInteractionTime = Date.now();
+
+    if (!(await checkVideoAvailable()) || !(await checkVideoOnPool(youtubeList))) {
+      await delay(15000);
+      if (!(await changeVideo())) {
+        return;
+      }
+    } else {
+      await checkAds();
+      await checkPause();
+      await checkAudio();
+      await checkAutoPlay();
+      await checkMicrophone();
+    }
+
+    if (watchTime > randomChangeTime) {
+      if (isLike && randomRoll() < likePercent) {
+        await checkLike();
+      }
+
+      if (isComment && randomRoll() < commentPercent) {
+        await commentOnVideo(commentPool);
+      }
+
+      if (!(await changeVideo())) {
+        return;
+      }
+
+      // if (isSubTab) {
+      //   await subTabInteraction();
+      // }
+
+      randomChangeTime += random(changeClipFrom, changeClipTo);
+    }
+
+    await delayScrollForVideo();
+
+    watchTime += (Date.now() - lastInteractionTime) / 60000;
+  }
+}
+
+// async function subTabInit() {
+//   await switchActiveToTab(subTab);
+
+//   await fetchNavigate('https://www.youtube.com/?hl=en', true);
+
+//   await subTabChangeVideo();
+
+//   await switchActiveToTab(mainTab);
+// }
+
+// async function subTabInteraction() {
+//   await switchActiveToTab(subTab);
+
+//   await checkAds();
+//   await checkPause();
+//   await checkAudio();
+
+//   await switchActiveToTab(mainTab);
+// }
+
+async function commentOnVideo(commentPool) {
+
+  let data = await fetchGetDistanceToBottom();
+  await fetchScrollReal(data.distance);
+
+  let comment = randomPickInArray(commentPool);
+  if (await fetchSendTextReal('[role="textbox"]', 'Add a comment', comment)) {
+    await fetchClickReal('button[aria-label="Comment"]');
+  }
+}
+
+async function changeVideo() {
+  console.log('changeVideo');
+  let result;
+  await delay(5000);
+  do {
+    result = await searchYoutube();
+    await delay(5000);
+  } while (!result);
+
+  if (result == 'none') {
+    return false;
+  }
+
+  await checkAds();
+  await checkPause();
+  await checkAudio();
+  await checkAutoPlay();
+  return true;
+}
+
+// async function subTabChangeVideo() {
+//   console.log('subTabChangeVideo');
+//   let result;
+//   do {
+//     result = await subTabSearchYoutube();
+//     await delay(5000);
+//   } while (!result);
+
+//   await checkAds();
+//   await checkPause();
+//   await checkAudio();
+//   await checkAutoPlay();
+//   await checkLike();
+//   await checkSubscribe();
+// }
+
+async function checkPause() {
+  try {
+    console.log('checkPause');
+    if (await fetchQuickScanElementByText('yt-formatted-string', 'Video paused. Continue watching?')) {
+      await fetchClickReal('button[aria-label="Yes"]');
+    }
+    if (await fetchQuickScanElementByText('yt-formatted-string', 'Continue watching?')) {
+      await fetchClickReal('button[aria-label="Yes"]');
+    }
+    if (await fetchQuickScanElement('button[title="Play (k)"]')) {
+      await fetchClickReal('button[title="Play (k)"]');
+    }
+  } catch (error) {
+    console.error('checkPause failed: ' + error);
+  }
+}
+
+async function checkAudio() {
+  try {
+    console.log('checkAudio');
+    if (await fetchQuickScanElement('button[title="Unmute (m)"]')) {
+      await fetchClickReal('button[title="Unmute (m)');
+    }
+  } catch (error) {
+    console.error('checkAudio failed: ' + error);
+  }
+}
+
+async function checkAutoPlay() {
+  try {
+    console.log('checkAutoPlay');
+    if (await fetchQuickScanElement('button[title="Autoplay is off"]')) {
+      await fetchClickReal('button[title="Autoplay is off');
+    }
+  } catch (error) {
+    console.error('checkAutoPlay failed: ' + error);
+  }
+}
+
+async function checkMicrophone() {
+  try {
+    console.log('checkMicrophone');
+    if (await fetchQuickScanElementByText('#prompt', 'Search with your voice')) {
+      await fetchClickReal('button[aria-label="Cancel"]');
+    }
+  } catch (error) {
+    console.error('checkMicrophone failed: ' + error);
+  }
+}
+
+async function checkSubscribe() {
+  try {
+    console.log('checkSubscribe');
+    if (await fetchQuickScanElement('button[aria-label*="Subscribe to"]')) {
+      await fetchClickReal('button[aria-label*="Subscribe to"]');
+    }
+  } catch (error) {
+    console.error('checkSubscribe failed: ' + error);
+  }
+}
+
+async function checkLike() {
+  try {
+    console.log('checkLike');
+    if (await fetchQuickScanElement('button[aria-label*="like this video along with"]')) {
+      await fetchClickReal('button[aria-label*="like this video along with"]');
+    }
+  } catch (error) {
+    console.error('checkLike failed: ' + error);
+  }
+}
+
+async function checkAds() {
+  try {
+    console.log('checkAds');
+    if (await fetchQuickScanElementByText('.ytp-skip-ad-button__text', 'Skip Ad')) {
+      await fetchClickByTextReal('.ytp-skip-ad-button__text', 'Skip Ad');
+    }
+    if (await fetchQuickScanElementByText('.ytp-skip-ad-button__text', 'Skip Ads')) {
+      await fetchClickByTextReal('.ytp-skip-ad-button__text', 'Skip Ads');
+    }
+    if (await fetchQuickScanElementByText('.ytp-skip-ad-button__text', 'Skip')) {
+      await fetchClickByTextReal('.ytp-skip-ad-button__text', 'Skip');
+    }
+  } catch (error) {
+    console.error('checkAds failed: ' + error);
+  }
+}
+
+async function checkVideoAvailable() {
+  try {
+    console.log('checkVideoAvailable');
+    if (await fetchQuickScanElementByText('*', 'Video unavailable')) {
+      console.log('Video unavailable');
+      return false;
+    }
+    if (await fetchQuickScanElementByText('*', 'This video is private')) {
+      console.log('This video is private');
+      return false;
+    }
+    if (await fetchQuickScanElementByText('*', 'This is a private video')) {
+      console.log('This is a private video');
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('checkVideoAvailable failed: ' + error);
+  }
+}
+
+async function checkVideoOnPool(youtubeList) {
+  try {
+    console.log('checkVideoOnPool');
+    let currentUrl = await fetchGetCurrentUrl();
+    const videoLinkID = currentUrl.split("/watch?v=")[1].split('&')[0];
+    return youtubeList.some(item => item.includes(videoLinkID));
+  } catch (error) {
+    console.error('checkVideoOnPool failed: ' + error);
+  }
+}
+
+async function searchYoutube() {
+  let fetchedCampaign = await fetchCampaign();
+
+  try {
+
+    let suggestPercent = fetchedCampaign.SuggestPercent;
+
+    let percentFluctuation = fetchedCampaign.PercentFluctuation;
+
+    let youtubeHistoryList = profile.HistoryPool.split(',').map(item => item.trim());
+    let youtubeList = fetchedCampaign.YoutubePool.split('\n').map(item => item.trim());
+
+    youtubeList = youtubeList.filter(x => {
+      let vidHref = '';
+      try {
+        vidHref = x.split(';')[2];
+      } catch (error) {
+        return false;
+      }
+      let videoId = vidHref.split("/watch?v=")[1].split('&')[0];
+      return !youtubeHistoryList.some(y => y.includes(videoId));
+    });
+
+    if (youtubeList.length == 0) {
+      profile.HistoryPool = '';
+      return 'none';
+    }
+
+    let youtube = randomPickInArray(youtubeList);
+    let [channelName, videoName, link] = youtube.split(';').map((item) => item.trim());
+
+    let nameArray = videoName.split(' ');
+    let startIndex = 0;
+    let endIndex = random(nameArray.length / 2, nameArray.length);
+    let nameModified = nameArray.slice(startIndex, endIndex).join(' ');
+    let keyword = channelName + ' ' + nameModified;
+    if (randomRoll() < 30) {
+      keyword = nameModified;
+    }
+
+    // Find suggest video in pool
+    let isSuggest = randomRoll() < clamp(random(suggestPercent - percentFluctuation, suggestPercent + percentFluctuation), 0, 100);
+    if (isSuggest) {
+      let result = await scanVisibleVideo('[id*="thumbnail"][href*="/watch"]', youtubeList);
+      if (result) {
+
+        youtubeHistoryList.push(result.split("/watch?v=")[1].split('&')[0]);
+        profile.HistoryPool = youtubeHistoryList.join('\n');
+        return result;
+      }
+    }
+
+    // Search video
+    await fetchClickReal('.yt-icon-button.style-scope[aria-label="Search"]');
+    await fetchClickReal('.yt-spec-button-shape-next.yt-spec-button-shape-next--text.yt-spec-button-shape-next--mono.yt-spec-button-shape-next--size-m.yt-spec-button-shape-next--icon-only-default[aria-label="Clear search query"]');
+    if (await fetchSendTextReal('input#search', keyword)) {
+      await fetchClickReal('.style-scope.ytd-searchbox[aria-label="Search"]');
+
+      let result = await scanVisibleVideo('[id*="thumbnail"][href*="/watch"]', youtubeList);
+      if (result) {
+        youtubeHistoryList.push(result.split("/watch?v=")[1].split('&')[0]);
+        profile.HistoryPool = youtubeHistoryList.join('\n');
+        return result;
+      }
+    }
+
+    // Navigate if nothing found
+    //await fetchNavigate(link, true);
+    await fetchSendTextBrowserReal(link);
+
+    youtubeHistoryList.push(link.split("/watch?v=")[1].split('&')[0]);
+    profile.HistoryPool = youtubeHistoryList.join('\n');
+    return link;
+
+  } catch (error) {
+    console.error('An error occurred:' + error);
+  }
+  return null;
+}
+
+async function searchMusic() {
+  let fetchedCampaign = await fetchCampaign();
+
+  try {
+    let musicList = fetchedCampaign.MusicPool.split('\n').map(item => item.trim());
+
+    let music = randomPickInArray(musicList);
+    let [name, artist] = music.split(';').map((item) => item.trim());
+
+    await fetchClickByTextRealInFrame('iframe[src="https://www.tiktok.com/creator#/upload?scene=creator_center"]', '[class="jsx-3621125540 clear-icon"]', '', 1);
+    await fetchSendTextRealInFrame('iframe[src="https://www.tiktok.com/creator#/upload?scene=creator_center"]', '[placeholder="Search"]', `${name} ${artist}`);
+    await fetchClickByTextRealInFrame('iframe[src="https://www.tiktok.com/creator#/upload?scene=creator_center"]', '[class="css-1sz0pc1"]', 'Search');
+
+    while (true) {
+
+      if (!(await fetchClickByTextRealInFrame('iframe[src="https://www.tiktok.com/creator#/upload?scene=creator_center"]', '[class*="music-card-info-basic"]', [name, artist], 10000, '[class="jsx-2270869350 search-result-list"]', false))) {
+        return null;
+      }
+
+      if ((await fetchClickByTextRealInFrame('iframe[src="https://www.tiktok.com/creator#/upload?scene=creator_center"]', '[class="css-m2fcla"]', 'Use'))) {
+        break;
+      }
+    }
+
+    await fetchClickByTextRealInFrame('iframe[src="https://www.tiktok.com/creator#/upload?scene=creator_center"]', '[class="css-ug6w5y"]', 'Save edit');
+
+    return music;
+
+  } catch (error) {
+    console.error('An error occurred:' + error);
+  }
+  return null;
+}
+
+// async function subTabSearchYoutube() {
+//   let fetchedCampaign = await fetchCampaign();
+
+//   try {
+//     let subTabYoutubeList = fetchedCampaign.SubTabYoutubePool.split('\n').map(item => item.trim());
+
+//     for (let index = 0; index < subTabYoutubeList.length; index++) {
+//       let youtube = subTabYoutubeList[index];
+//       let channelId = youtube.split(".com/")[1].split('/')[0];
+//       if (await fetchQuickScanElement(`#dismissible:has([href*="${channelId}"]) *[id*="thumbnail"][href*="/watch"]`)) {
+//         await fetchClickRandomReal(`#dismissible:has([href*="${channelId}"]) *[id*="thumbnail"][href*="/watch"]`);
+//         return channelId;
+//       }
+//     }
+
+//     let link = randomPickInArray(subTabYoutubeList);
+//     await fetchNavigate(link, true);
+//     if (await fetchClickRandomReal('[id*="thumbnail"][href*="/watch"]')) {
+//       return link;
+//     }
+//   } catch (error) {
+//     console.error('An error occurred:' + error);
+//   }
+//   return null;
+// }
+
+async function scanVisibleVideo(selector, itemList) {
+  await delay(5000);
+  let hrefs = await fetchGetHrefElements(selector); // get href of visible posts
+  // Scan all visible post which exist in the pool
+  let visibleList = itemList.filter(item => {
+    // Check if webItem contains any of the hrefs
+    return hrefs.some(href => {
+      let videoId = href.split("/watch?v=")[1].split('&')[0];
+      return item.includes(videoId);
+    });
+  });
+
+  if (visibleList.length > 0) {
+    let item = randomPickInArray(visibleList);
+    let [channelName, videoName, link] = item.split(';').map((item) => item.trim());
+    let videoId = link.split("/watch?v=")[1].split('&')[0];
+    await fetchClickReal(`[href*="${videoId}"]`);
+
+    return link;
+  }
+  return null;
+}
+
+async function delayScroll() {
+  if (randomRoll() < 20) {
+    if (randomRoll() < 70) {
+      await fetchScrollReal(random(scrollDownDistanceMin, scrollDownDistanceMax));
+    } else {
+      await fetchScrollReal(random(scrollUpDistanceMin, scrollUpDistanceMax));
+    }
+  }
+  await delay(random(10000, 20000));
+}
+
+async function delayScrollForVideo() {
+  console.log("delayScrollForVideo");
+  if (randomRoll() < 5) {
+    if (randomRoll() < 30) {
+      await fetchScrollReal(random(scrollDownDistanceMin, scrollDownDistanceMax));
+    } else {
+      await fetchScrollReal(random(scrollUpDistanceMin, scrollUpDistanceMax));
+    }
+  }
+  await delay(random(10000, 20000));
+}
+
+async function checkWebPostElement() {
+  let clss;
+  if (await fetchQuickScanElement('.title.mb-20.mt-4')) {
+    clss = '.title.mb-20.mt-4';
+  } else if (await fetchQuickScanElement('.entry-title.mag-post-title')) {
+    clss = '.entry-title.mag-post-title';
+  } else if (await fetchQuickScanElement('.entry-title.entry-title-big')) {
+    clss = '.entry-title.entry-title-big';
+  } else if (await fetchQuickScanElement('.entry-title')) {
+    clss = '.entry-title';
+  } else if (await fetchQuickScanElement('.spnc-entry-title')) {
+    clss = '.spnc-entry-title';
+  } else if (await fetchQuickScanElement('.post-title')) {
+    clss = '.post-title';
+  }
+  return clss;
+}
+
+
+async function initReg()
+{
+
+    let dataCity = [
+        "An Giang|880000|089",
+        "Bac Giang|220000|024",
+        "Bac Ninh|790000|027",
+        "Binh Dinh|820000|052",
+        "Da Nang|550000|048",
+        "Ha Noi|100000|001",
+        "Hai Phong|180000|031",
+        "Nam Dinh|420000|036",
+        "Ninh Binh|430000|037",
+        "Quang Binh|510000|044",
+        "Quang Ninh|200000|022",
+        "Thai Binh|410000|034",
+        "Thua Thien Hue|530000|046",
+        "Vinh Phuc|280000|026",
+        "Khanh Hoa|650000|056",
+        "Hung Yen|160000|033",
+        "Kien Giang|920000|091",
+        "Can Tho|900000|092",
+        "Hai Duong|170000|030",
+        "Long An|850000|080"
+    ];
+
+    let randomIndex = Math.floor(Math.random() * dataCity.length);
+    let [city, postalCode, cmndNum] = dataCity[randomIndex].split('|');
+
+    console.log(`City: ${city}`);
+    console.log(`Postal Code: ${postalCode}`);
+    console.log(`CMND Number: ${cmndNum}`);
+
+  let getAddress = await fetchPO('address');
+
+  let firstName = getAddress.split('|')[0];
+
+  let lastName = getAddress.split('|')[1];
+
+  let fullName = firstName + ' ' + lastName;
+
+  let birthday = getAddress.split('|')[2];
+
+  let street = getAddress.split('|')[3];
+
+  //let city = getAddress.split('|')[4];
+
+  //if (city === 'na')
+  //{
+  //  city = 'Ha Noi';
+  //}
+
+    //let postalCode = getAddress.split('|')[5];
+
+    //let city = dataCity[randomCity].split('|')[0];
+
+    //let postalCode = dataCity[randomCity].split('|')[1];
+
+    //let cmndNum = dataCity[randomCity].split('|')[2];
+
+    let cmnd = await generateRandomNumber(cmndNum, 9);
+
+    //let randomCityCMND = Math.floor(Math.random() * 4) + 1;
+
+    //if (randomCityCMND === 2)
+    //{
+    //    cmnd = await generateRandomNumber('48', 10);
+    //    console.log('Da Nang');
+    //}
+    //else if (randomCityCMND === 3) {
+    //    cmnd = await generateRandomNumber('79', 10);
+    //    console.log('Ho Chi Minh');
+    //}
+    //else if (randomCityCMND === 4) {
+    //    cmnd = await generateRandomNumber('75', 10);
+    //    console.log('Dong Nai');
+    //}
+
+    let mail = profile.ID;       
+
+    let reformartMail = mail.replace(/[^a-zA-Z0-9]/g, '');
+
+    let passRe = profile.Pass;
+
+    let reformartPass = passRe.replace(/[^a-zA-Z0-9]/g, '');
+
+    let securityQuestion = reformartPass.slice(0, 4) + reformartMail.slice(0, 4);
+
+    let password = profile.Pass + reformartMail.slice(0, 4);
+
+    console.log(password);
+
+    let bank = profile.Extra.split('|')[0];
+
+    let randomAction = Math.floor(Math.random() * 4) + 1;
+
+    console.log(randomAction);
+
+  await fetchSendTextBrowserReal('payoneer.com/go/');
+
+  await delay(10000);
+
+  let wait = 0;
+
+    while (true) {
+
+        await fetchClickReal('#qOptions_0 > div:nth-child(2)', 1);
+
+        await fetchClickByTextReal('button', 'Accept All Cookies', 1);
+
+        await fetchClickByTextReal('button', 'OK', 1);
+
+        await fetchClickReal('.qOptionsItems-9.isVolume > div:nth-child(3)', 1);
+
+        await fetchClickReal('.qOptionsItems-3.isVolume > div:nth-child(1)', 1);
+
+        await fetchClickReal('.qOptionsItems-6.isVolume > div:nth-child(2)', 1);
+
+        await fetchClickReal('#qOptions_2 > div:nth-child(1)', 1);
+
+        await fetchClickReal('#qOptions_5 > div:nth-child(2)', 1);
+
+        await fetchClickReal('#qOptions_6 > div:nth-child(1)', 1);
+
+        await fetchClickReal('#qOptions_7 > div:nth-child(2) ', 1);
+
+        await fetchClickReal('#qOptions_9 > div:nth-child(2)', 1);
+
+        if (await fetchClickReal('#planTopHolder > a', 1)) {
+            break;
+        }
+
+        wait++;
+
+        console.log(wait);
+
+        await delay(3000);
+
+        if (wait % 20 === 0) {
+            await fetchSendTextBrowserReal('payoneer.com/accounts/');
+
+            await delay(10000);
+        }
+
+        if (wait > 120) {
+            await fetchSetLog('Timeout');
+
+            await fetchTriggerDone();
+        }
+
+    }
+
+  //wait = 0;
+
+  //while (!await fetchClickReal('#txtFirstName'))
+  //{
+  //  wait++;
+
+  //  await delay(3000);
+
+  //  if(wait > 120)
+  //  {
+  //    await fetchSetLog('Timeout');
+
+  //    await fetchTriggerDone();
+  //  }
+  //}
+
+    //await delay(1000);
+
+    //const businessLines = ['3', '8'];
+
+
+    //const randomBusinessLine = businessLines[Math.floor(Math.random() * businessLines.length)];
+
+
+    //const volumeLines = ['below-5000', '5000-10000', '10000-25000'];
+
+
+    //const randomVolumeLine = volumeLines[Math.floor(Math.random() * volumeLines.length)];
+
+    //let url = await fetchGetCurrentUrl();
+
+    //const myUrl = new URL(url);
+
+    //myUrl.searchParams.set('BusinessLine', randomBusinessLine);
+
+    //myUrl.searchParams.set('Volume', randomVolumeLine);
+
+    //let newUrl = myUrl.toString();
+
+    //console.log(newUrl);
+
+    //await fetchSendTextBrowserReal(newUrl);
+
+
+    wait = 0;
+
+    while (!await fetchClickReal('#txtFirstName')) {
+        wait++;
+
+        await delay(3000);
+
+        if (wait > 120) {
+            await fetchSetLog('Timeout');
+
+            await fetchTriggerDone();
+        }
+    }
+
+    console.log('Found TxtFirstName2');
+
+    await delay(1000);
+
+  wait = 0;
+
+  while (!await fetchClickByTextReal('div','Payoneer Sign Up',1))
+  {
+      console.log('zo');
+
+      await fetchClickReal('#Localization', 5);
+
+      await fetchPO('sendKeys|home');
+
+      await delay(1000);
+
+      await fetchPO('sendKeys|enter');
+
+      await fetchClickReal('#txtFirstName',30);
+
+    await delay(10000);
+
+    wait++;
+
+    if(wait > 40)
+    {
+      await fetchSetLog('Timeout');
+
+      await fetchTriggerDone();
+    }
+
+    }
+
+    await fetchSendTextReal('#txtFirstName', firstName);
+
+    if (randomAction === 1) {
+        await fetchClickReal('#txtFirstName');
+
+        await delay(1000);
+
+        await fetchPO('sendKeys|end');
+
+        await delay(1000);
+
+        await fetchPO('sendKeys|backspace');
+
+        await delay(1000);
+
+        let lastCharFirstName = firstName[firstName.length - 1];
+        console.log(lastCharFirstName);
+
+        await fetchSendTextReal('#txtFirstName', lastCharFirstName);
+    }
+
+    await fetchSendTextReal('#txtLastName', lastName);
+
+    if (randomAction === 2)
+    {
+
+        await fetchClickReal('#txtLastName');
+
+        await delay(1000);
+
+        await fetchPO('sendKeys|end');
+
+        await delay(1000);
+
+        await fetchPO('sendKeys|backspace');
+
+        await delay(1000);
+
+        let lastCharLastName = lastName[lastName.length - 1];
+        console.log(lastCharLastName);
+
+        await fetchSendTextReal('#txtLastName', lastCharLastName);
+    }
+
+    await fetchSendTextReal('#txtEmail', mail);
+
+    await fetchSendTextReal('#txtRetypeEmail', mail);
+
+    //await fetchSetValueElement('#datepicker5',birthday);
+
+    await fetchClickReal('#datepicker5');
+
+    await fetchClickByTextReal('div', 'Payoneer Sign Up');
+
+    await fetchClickReal('#datepicker5');
+
+    //await fetchClickReal('#datepicker5');
+
+    //await fetchClickReal('div', '#ui-datepicker-div > div > div > select.ui-datepicker-year');
+
+    for (let i = 0; i < 3; i++)
+    {
+        await fetchPO('sendKeys|tab');
+
+        await delay(2000);
+    }
+
+    await fetchPO('sendKeys|enter');
+
+    await delay(2000);
+
+    let randomUpYear = Math.floor(Math.random() * 30) + 20;
+
+    for (let i = 0; i < randomUpYear; i++) {
+        await fetchPO('sendKeys|up');
+
+        await delay(100);
+    }
+
+    await fetchPO('sendKeys|enter');
+
+    await delay(2000);
+
+    for (let i = 0; i < 2; i++) {
+        await fetchPO('sendKeys|tab');
+
+        await delay(2000);
+    }
+
+    await fetchPO('sendKeys|enter');
+
+    await delay(2000);
+
+    //await fetchClickReal('div', '#ui-datepicker-div > div > div > select.ui-datepicker-month');
+
+    let randomUpMonth = Math.floor(Math.random() * 6) + 1;
+
+    for (let i = 0; i < randomUpMonth; i++) {
+        await fetchPO('sendKeys|up');
+
+        await delay(100);
+    }
+
+    await fetchPO('sendKeys|enter');
+
+    await delay(1000);
+
+    await fetchClickByTextReal('div', 'Payoneer Sign Up');
+
+    await fetchClickReal('#txtFirstName');
+
+    await fetchClickReal('#PersonalDetailsButtonArkose');
+
+  await fetchClickReal('#PersonalDetailsButton');
+
+  wait = 0;
+
+  while (true)
+  {
+    let contact = await fetchPO('checkIMG|contact');
+    if(contact === 'Found')
+    {
+      break;
+    }
+
+    let robot = await fetchPO('checkIMG|robot');
+    if(robot === 'Found')
+    {
+      await fetchSetLog('Robot');
+
+      await fetchTriggerDone();
+    }
+
+    let funcaptcha = await fetchPO('checkIMG|funcaptcha');
+    if(funcaptcha === 'Found')
+    {
+      await fetchSetLog('Robot');
+
+      await fetchTriggerDone();
+    }
+
+    if(await fetchQuickScanElement('.human-box-position.active',2) || await fetchQuickScanElement('span[aria-labelledby=\'recaptcha-accessible-status\']',2))
+    {
+      await fetchSetLog('Robot');
+
+      await fetchTriggerDone();
+    }
+
+    await fetchClickReal('#PersonalDetailsButtonArkose',2);
+
+    await fetchClickReal('#PersonalDetailsButton',2);
+
+    wait++;
+
+    if(wait > 40)
+    {
+      await fetchSetLog('Timeout');
+
+      await fetchTriggerDone();
+    }
+
+  }
+
+  await  delay(10000);
+
+    //await fetchSetValueElement('#ddlResidencyCountries','VN');
+
+    await fetchClickReal('#ddlResidencyCountries');
+
+    for (let i = 0; i < 3; i++) {
+        await fetchPO('sendKeys|buttonV');
+
+        await delay(1000);
+    }
+
+    await fetchPO('sendKeys|enter');
+
+  await  delay(10000);
+
+  //await fetchSetValueElement('#AccountPhoneNumber_iso2','VN');
+
+  //await delay(5000);
+
+  let randomNumStreet = Math.floor(Math.random() * 9999) + 1;
+
+  await  fetchSendTextReal('#inputAddress',randomNumStreet);
+
+  await  fetchSendTextReal('#txtAddress1',randomNumStreet,1);
+
+    await delay(10000);
+
+    let randomActionStreet = Math.floor(Math.random() * 3) + 1;
+
+    randomActionStreet = 3;
+
+    if (randomActionStreet === 3)
+    {
+        let randomActionStreetSelect = Math.floor(Math.random() * 3) + 1;
+        if (randomActionStreetSelect === 1)
+        {
+            await fetchClickReal('#inputAddressOptions > div:nth-child(2)');
+        }
+        else if (randomActionStreetSelect === 2)
+        {
+            await fetchClickReal('#inputAddressOptions > div:nth-child(3)');
+        }
+        else if (randomActionStreetSelect === 3)
+        {
+            await fetchClickReal('#inputAddressOptions > div:nth-child(4)');
+        }
+
+        await delay(15000);
+
+        await fetchClickReal('#txtCity');
+
+        await delay(1000);
+
+        await fetchPO('sendKeys|end');
+
+        await delay(1000);
+
+        for (let i = 0; i < 30; i++) {
+            await fetchPO('sendKeys|backspace');
+
+            await delay(100);
+        }
+
+        await delay(1000);
+
+        await fetchClickReal('#txtZip');
+
+        await delay(1000);
+
+        await fetchPO('sendKeys|end');
+
+        await delay(1000);
+
+        for (let i = 0; i < 15; i++) {
+            await fetchPO('sendKeys|backspace');
+
+            await delay(100);
+        }
+
+        await delay(1000);
+    }
+    else
+    {
+        await fetchClickReal('div.inputAddressOptions_OtherAddressOption');
+
+        await delay(5000);
+
+        await fetchSendTextReal('#txtAddress1', street);
+
+        await fetchSendTextReal('#inputAddress', street, 1);
+
+        if (randomAction === 3) {
+            await fetchClickReal('#txtAddress1');
+
+            await delay(1000);
+
+            await fetchPO('sendKeys|end');
+
+            await delay(1000);
+
+            await fetchPO('sendKeys|backspace');
+
+            let lastCharStreet = street[street.length - 1];
+            console.log(lastCharStreet);
+
+            await fetchSendTextReal('#txtAddress1', lastCharStreet);
+            await fetchSendTextReal('#inputAddress', lastCharStreet, 1);
+        }
+    } 
+
+    await fetchSendTextReal('#txtCity', city);
+
+    if (randomAction === 4)
+    {
+        await fetchClickReal('#txtCity');
+
+        await delay(1000);
+
+        await fetchPO('sendKeys|end');
+
+        await delay(1000);
+
+        await fetchPO('sendKeys|backspace');
+
+        await delay(1000);
+
+        let lastCharCity = city[city.length - 1];
+        console.log(lastCharCity);
+
+        await fetchSendTextReal('#txtCity', lastCharCity);
+    }
+
+    await fetchSendTextReal('#txtZip', postalCode);
+
+
+  wait = 0;
+
+  let code= 'null'
+
+  while (true)
+  {
+    let number = 'null';
+
+    code = 'null';
+
+    let request_id = await fetchViotp('rent');
+
+    let waitRequest_Id = 0;
+
+    while (request_id === 'null')
+    {
+      request_id = await fetchViotp('rent');
+
+      await delay(2000);
+
+      waitRequest_Id++;
+
+      if(waitRequest_Id > 80)
+      {
+        await fetchSetLog('Timeout');
+
+        await fetchTriggerDone();
+      }
+    }
+
+    await delay(2000);
+
+    let waitGetNum = 0;
+
+    while(number === 'null')
+    {
+      number = await fetchViotp('getNum|' + request_id);
+
+      waitGetNum++;
+
+      await delay(2000);
+
+      if(waitGetNum > 80)
+      {
+        await fetchSetLog('Timeout');
+
+        await fetchTriggerDone();
+      }
+    }
+
+      await fetchClickReal('#AccountPhoneNumber_num');
+
+      await delay(1000);
+
+      await fetchPO('sendKeys|end');
+
+      await delay(1000);
+
+      for (let i = 0; i < 15; i++) {
+          await fetchPO('sendKeys|backspace');
+
+          await delay(100);
+      }
+
+    await delay(2000);
+
+    await fetchSendTextReal('#AccountPhoneNumber_num',number);
+
+    if(!await fetchClickReal('#lnkSendCodeArkose'))
+    {
+      await fetchClickReal('#lnkSendCode');
+    }
+
+    let waitGetCode = 0;
+
+    while(code === 'null')
+    {
+      if(await fetchQuickScanElementByText('#ContactDetailsGeneralError','General Error'))
+      {
+        console.log('General');
+
+        await fetchSetLog('General');
+
+        await fetchTriggerDone();
+        }
+
+        let funcaptcha = await fetchPO('checkIMG|funcaptcha');
+        if (funcaptcha === 'Found') {
+            await fetchSetLog('Robot');
+
+            await fetchTriggerDone();
+        }
+
+      //if(await fetchQuickScanElementByText('div','Code requested too many times'))
+      //{
+       // console.log('ManyPhone');
+
+        //await fetchSetLog('ManyPhone');
+
+        //await fetchTriggerDone();
+      //}
+
+      code = await fetchViotp('getOtp|' + request_id);
+
+      waitGetCode++;
+
+      console.log(waitGetCode);
+
+      await delay(6000);
+
+      if(waitGetCode > 20)
+      {
+        break;
+      }
+    }
+
+    if(code !== 'null')
+    {
+      break;
+    }
+
+    wait++;
+
+    if(wait > 3)
+    {
+      await fetchSetLog('Timeout');
+
+      await fetchTriggerDone();
+    }
+
+  }
+
+    await fetchSendTextReal('#txtVerificationCode', code);
+
+  await fetchClickReal('#ContactDetailsButton');
+
+  await delay(20000);
+
+  let checkSecurityStep = await fetchPO('checkIMG|security');
+
+  wait = 0;
+
+  while(checkSecurityStep === 'null')
+  {
+    checkSecurityStep = await fetchPO('checkIMG|security');
+
+    if(checkSecurityStep === 'null')
+    {        
+
+        await fetchSetValueElement('#txtZip', '');
+
+        await delay(1000);
+
+        await fetchSendTextReal('#txtZip', postalCode);
+
+        await fetchClickReal('#ContactDetailsButton');
+
+        await delay(30000);
+    }
+
+    wait++;
+
+    if(wait > 30)
+    {
+      await fetchSetLog('Timeout');
+
+      await fetchTriggerDone();
+    }
+  }
+
+    await fetchSendTextReal('#tbPassword', password);
+
+    await fetchSendTextReal('#tbRetypePassword', password);
+
+  await fetchClickReal('#ddlSecurityQuestions');
+
+  await delay(1000);
+
+  let randomDown = Math.floor(Math.random() * 6) + 1;
+
+    for (let i = 0; i < randomDown; i++) 
+  {
+    await fetchPO('sendKeys|down');
+
+    await delay(1000);
+  }
+
+  await fetchPO('sendKeys|enter');
+
+    await fetchSendTextReal('#tbSecurityAnswer', securityQuestion);
+
+  //await fetchSetValueElement('#ddlIssueCountry_1','VN');
+
+    await fetchSendTextReal('#txtCollectForeignId', cmnd);
+
+  await fetchSendTextReal('#txtCollectDrivingLicense',cmnd,1);
+
+  await fetchClickReal('#AccountDetailsButton');
+
+  await delay(10000);
+
+  let checkBankStep = await fetchPO('checkIMG|bank');
+
+  wait = 0;
+
+  while(checkBankStep === 'null')
+  {
+    checkBankStep = await fetchPO('checkIMG|bank');
+
+    await delay(6000);
+
+    wait++;
+
+    if(wait > 60)
+    {
+      await fetchSetLog('Timeout');
+
+      await fetchTriggerDone();
+    }
+  }
+
+  await fetchClickRealInFrame('#iframMR','div.form-object.field-select.field-select-searchable');
+
+  await delay(2000);
+
+  await fetchSendTextRealInFrame('#iframMR','span.select2-search.select2-search--dropdown > input','LIEN VIET');
+
+  await delay(5000);
+
+  await fetchClickRealInFrame('#iframMR','span.select2-results > ul > li:first-child');
+
+  await delay(2000);
+
+    await fetchSendTextRealInFrame('#iframMR', '#iachfield44', 'CN ' + city);
+
+    await fetchSendTextRealInFrame('#iframMR', '#iachfield2', fullName);
+
+    await fetchSendTextRealInFrame('#iframMR', '#iachfield3', bank);
+
+  await  fetchPO('checkIMG|agree1');
+
+    await fetchPO('checkIMG|agree2');
+
+  await fetchClickRealInFrame('#iframMR','#btnNextPhantomOnly');
+
+  await fetchSendTextRealInFrame('#iframMR','#iachfield4','LVBKVNVX',2);
+
+  await fetchClickRealInFrame('#iframMR','#btnConfirmPhantomOnly',2);
+
+  await delay(10000);
+
+  let checkSuccess = await fetchPO('checkIMG|success')
+
+    if (checkSuccess === 'Found') {
+        await fetchSetLog('Done');
+
+        await fetchTriggerDone();
+    }
+    else
+    {
+        await fetchSetLog('Fail');
+
+        await fetchTriggerDone();
+    }  
+}
