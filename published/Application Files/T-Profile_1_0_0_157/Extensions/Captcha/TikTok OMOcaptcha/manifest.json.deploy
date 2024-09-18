@@ -1,0 +1,65 @@
+{
+    "manifest_version": 3,
+    "name": "TikTok - OMOcaptcha.com",
+    "version": "240512",
+    "description": "Tự động giải captcha TikTok - Auto solve captcha TikTok",
+    "icons": {
+        "16": "data/icon16.png",
+        "48": "data/icon48.png",
+        "128": "data/icon128.png"
+    },
+    "action": {
+        "default_icon": "data/icon16.png",
+        "default_title": "FunCaptcha - OMOcaptcha.com",
+        "default_popup": "data/popup.html"
+    },
+    "background": {
+        "service_worker": "data/background.js",
+        "type": "module"
+    },
+    "host_permissions": [
+        "<all_urls>"
+    ],
+    "permissions": [
+        "declarativeNetRequest",
+        "contextMenus",
+        "scripting",
+        "storage",
+        "webRequest",
+        "tabs",
+        "webRequestBlocking",
+        "browsingData",
+        "activeTab"
+    ],
+    "declarative_net_request" : {
+        "rule_resources" : [{
+          "id": "csp-1",
+          "enabled": true,
+          "path": "data/rulesets/csp-1.json"
+        }, {
+          "id": "csp-2",
+          "enabled": true,
+          "path": "data/rulesets/csp-2.json"
+        }, {
+          "id": "csp-3",
+          "enabled": true,
+          "path": "data/rulesets/csp-3.json"
+        }, {
+          "id": "csp-4",
+          "enabled": true,
+          "path": "data/rulesets/csp-4.json"
+        }]
+      },
+    "content_scripts": [
+        {
+            "matches": [
+                "*://*.tiktok.com/*"
+            ],
+            "js": [
+                "data/content.js",
+                "config.js"
+            ],
+            "run_at": "document_end"
+        }
+    ]
+}
