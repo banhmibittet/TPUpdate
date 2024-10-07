@@ -1,0 +1,441 @@
+function addNotification(element) {
+    // Tạo phần tử thông báo lỗi nếu chưa tồn tại
+    var elementNotification = element.querySelector("#error-notification");
+    if (!elementNotification) {
+        // Tạo div thông báo lỗi
+        var errorDiv = document.createElement('div');
+        errorDiv.setAttribute('id', 'error-notification');
+        errorDiv.style.display = 'none';
+        errorDiv.style.zIndex = '111111';
+        errorDiv.style.position = 'flex';
+        errorDiv.style.width = '100%';
+        errorDiv.style.height = '100%';
+        errorDiv.style.margin = 'auto';
+        errorDiv.style.inset = '0px';
+        errorDiv.style.textSizeAdjust = '100% !important';
+        errorDiv.style.fontSize = '30px';
+        errorDiv.style.display = 'flex';
+        errorDiv.style.justifyContent = 'center';
+        errorDiv.style.alignItems = 'center';
+        errorDiv.style.color = 'red';
+        errorDiv.innerText = "";
+        element.appendChild(errorDiv);
+    }
+}
+
+
+function showError(message) {
+    var errorDiv = document.querySelector('#error-notification');
+    errorDiv.innerText = message;
+    errorDiv.style.display = 'block';
+    setTimeout(function () {
+        errorDiv.style.display = 'none';
+    }, 5000);
+}
+
+let isElementVisible = false;
+// Hàm callback được gọi khi có thay đổi trong phần tử hoặc các phần tử con
+function handleElementMutation(mutationsList, observer) {
+    for (const mutation of mutationsList) {
+        if (mutation.type === 'childList') {
+            // Kiểm tra sự xuất hiện của phần tử bạn quan tâm
+            const targetElement = document.querySelector('div.captcha_verify_container');
+
+            if (targetElement && targetElement.classList.contains('captcha_verify_container')) {
+                if (!isElementVisible) {
+                    // Phần tử đã xuất hiện, thực hiện các thao tác bạn muốn
+                    addNotification(targetElement);
+                    console.log('Phát hiện captcha:', targetElement);
+                    isElementVisible = true;
+                    waitForAnyElement(['img[data-testid="whirl-outer-img" i]', 'img[class*="captcha_verify_img_slide" i]', 'div[class*="verify-captcha-submit-button SubmitButton" i]'], 10000)
+                        .then((elementExists) => {
+                            if (!elementExists) return;
+                            if (API_TOKEN != "", API_TOKEN != "YOU_API_TOKEN") {
+                                chrome.storage.local.set({ "apiToken": API_TOKEN ?? "" }, function () {
+                                });
+                            }
+
+                            chrome.storage.local.get("apiToken", function (result) {
+                                const apiToken = result.apiToken;
+                                if (apiToken) {
+                                    API_TOKEN = apiToken;
+                                }
+                            });
+                            if (findElement('img[data-testid="whirl-outer-img" i]')) {
+                                captchaRotate();
+                            } else if (findElement('img[class*="captcha_verify_img_slide" i]')) {
+                                captchaKeoTha();
+                            } else if (findElement('div[class*="verify-captcha-submit-button SubmitButton" i]')) {
+                                captcha3D();
+                            }
+                        });
+
+                }
+            } else {
+                isElementVisible = false;
+            }
+        }
+    }
+}
+
+const observer = new MutationObserver((mutations, observer) => {
+    handleElementMutation(mutations, observer);
+});
+
+observer.observe(document.body, { childList: true, subtree: true });
+
+async function captchaRotate() {
+    console.log('Captcha xoay');
+    while (true) {
+        await delay(500)
+        var imageOuter = "";
+        var imageInside = "";
+        for (let i = 0; i < 10; i++) {
+            imageOuter = document.querySelector('img[data-testid="whirl-outer-img"]');
+            if (imageOuter != null) break;
+            await delay(1000)
+        }
+        imageInside = document.querySelector('img[data-testid="whirl-inner-img"]');
+        if (!imageOuter | imageInside) return;
+        var image_url_Outer = null;
+        var image_url_Inside = null;
+        for (let i = 0; i < 10; i++) {
+            image_url_Outer = imageOuter.src;
+            image_url_Inside = imageInside.src;
+            if (image_url_Outer != "" && image_url_Inside != "") break;
+            await delay(1000)
+        }
+        if (image_url_Outer == "" | image_url_Inside == "") {
+            if (LOOP) {
+                document.querySelector('a[class*="secsdk_captcha_refresh RefreshButton" i]').click();
+                continue;
+            } else {
+                return;
+            }
+        }
+        const data = JSON.stringify({
+            api_token: API_TOKEN,
+            data: {
+                type_job_id: 23,
+                image_url: image_url_Outer + "|" + image_url_Inside,
+            }
+        });
+        const jobId = await callCreateJob(data)
+        if (jobId === null || jobId === "") {
+            if (LOOP) {
+                document.querySelector('a[class*="secsdk_captcha_refresh RefreshButton" i]').click();
+                continue;
+            } else {
+                return;
+            }
+        }
+        const result = await callGetJobResult(jobId, 15)
+        if (result === null || result === "") {
+            if (LOOP) {
+                document.querySelector('a[class*="secsdk_captcha_refresh RefreshButton" i]').click();
+                continue;
+            } else {
+                return;
+            }
+        }
+        let conutX = parseInt(result, 10);
+        var button = document.querySelector('#secsdk-captcha-drag-wrapper')
+        await simulateDrag(button, conutX)
+        if (LOOP) {
+            if (await waitForElement("#secsdk-captcha-drag-wrapper", 500, 5000)) {
+                console.log("Giải captcha thành công");
+                break;
+            } else {
+                console.log("Giải captcha thất bại");
+            }
+        }
+    }
+}
+async function captchaKeoTha() {
+    console.log('Captcha kéo thả');
+    while (true) {
+        await delay(500)
+        var image = null;
+        for (let i = 0; i < 10; i++) {
+            image = document.querySelector("#captcha-verify-image");
+            if (image != null) break;
+            await delay(1000)
+        }
+        if (!image) return;
+        var image_url = null;
+        for (let i = 0; i < 10; i++) {
+            image_url = image.src;
+            if (image_url != null) break;
+            await delay(1000)
+        }
+        if (image_url == null) {
+            if (LOOP) {
+                document.querySelector('a[class*="secsdk_captcha_refresh RefreshButton" i]').click();
+                continue;
+            } else {
+                return;
+            }
+        }
+        const data = JSON.stringify({
+            api_token: API_TOKEN,
+            data: {
+                type_job_id: 21,
+                image_url: image_url,
+                width_view: image.width
+            }
+        });
+        const jobId = await callCreateJob(data)
+        if (jobId === null || jobId === "") {
+            if (LOOP) {
+                document.querySelector('a[class*="secsdk_captcha_refresh RefreshButton" i]').click();
+                continue;
+            } else {
+                return;
+            }
+        }
+        const result = await callGetJobResult(jobId, 15)
+        if (result === null | result === "") {
+            if (LOOP) {
+                document.querySelector('a[class*="secsdk_captcha_refresh RefreshButton" i]').click();
+                continue;
+            } else {
+                return;
+            }
+        }
+        let conutX = parseInt(result, 10);
+        var button = document.querySelector("#secsdk-captcha-drag-wrapper")
+        await simulateDrag(button, conutX)
+        if (LOOP) {
+            if (await waitForElement('#captcha-verify-image', 500, 5000)) {
+                console.log("Giải captcha thành công");
+                break;
+            } else {
+                console.log("Giải captcha thất bại");
+            }
+        }
+    }
+}
+async function captcha3D() {
+    console.log('Captcha 3D');
+    while (true) {
+        await delay(500)
+        var image = null;
+        for (let i = 0; i < 10; i++) {
+            image = document.querySelector("#captcha-verify-image");
+            if (image != null) break;
+            await delay(1000)
+        }
+        if (!image) return;
+        var image_url = null;
+        for (let i = 0; i < 10; i++) {
+            image_url = image.src;
+            if (image_url != null) break;
+            await delay(1000)
+        }
+        if (image_url == null) {
+            if (LOOP) {
+                document.querySelector('a[class*="secsdk_captcha_refresh RefreshButton" i]').click();
+                continue;
+            } else {
+                return;
+            }
+        }
+        const data = JSON.stringify({
+            api_token: API_TOKEN,
+            data: {
+                type_job_id: 22,
+                image_url: image_url,
+                width_view: image.width,
+                height_view: image.height,
+            }
+        });
+        const jobId = await callCreateJob(data)
+        if (jobId == null | jobId == "") {
+            if (LOOP) {
+                document.querySelector('a[class*="secsdk_captcha_refresh RefreshButton" i]').click();
+                continue;
+            } else {
+                return;
+            }
+        }
+        const result = await callGetJobResult(jobId, 15)
+        if (result == null | result == "") {
+            if (LOOP) {
+                document.querySelector('a[class*="secsdk_captcha_refresh RefreshButton" i]').click();
+                continue;
+            } else {
+                return;
+            }
+        }
+        var resultSplit = result.split('|')
+        let conutX1 = parseInt(resultSplit[0], 10);
+        let conutY1 = parseInt(resultSplit[1], 10);
+        let conutX2 = parseInt(resultSplit[2], 10);
+        let conutY2 = parseInt(resultSplit[3], 10);
+        simulateClick(image, conutX1, conutY1)
+        await delay(DELAY_CLICK)
+        simulateClick(image, conutX2, conutY2)
+        await delay(DELAY_CLICK)
+        var button = document.querySelector('div[class*="verify-captcha-submit-button SubmitButton" i]')
+        button.click()
+        if (LOOP) {
+            if (await waitForElement('#captcha-verify-image', 500, 5000)) {
+                console.log("Giải captcha thành công");
+                break;
+            } else {
+                console.log("Giải captcha thất bại");
+            }
+        }
+    }
+}
+function findElement(selector) {
+    const element = document.querySelector(selector);
+    if (element) {
+        return true;
+    }
+    return false;
+}
+function waitForAnyElement(selectors, timeout) {
+    return new Promise((resolve) => {
+        const intervalId = setInterval(() => {
+            for (const selector of selectors) {
+                const element = document.querySelector(selector);
+                if (element) {
+                    clearInterval(intervalId);
+                    resolve(true);
+                    return;
+                }
+            }
+            timeout -= 1000;
+            if (timeout <= 0) {
+                clearInterval(intervalId);
+                resolve(false);
+            }
+        }, 500);
+    });
+}
+
+function callCreateJob(data) {
+    try {
+        return new Promise((resolve, reject) => {
+            const port = chrome.runtime.connect({ name: "content-script" });
+            port.postMessage({ type: "createJob", data: data });
+            port.onMessage.addListener(function (response) {
+                if (response && response.type === "createJobResponse") {
+                    console.log("Job id:", response.jobId);
+                    if (response.jobId == "Unauthorized") {
+                        showError('Invalid API token');
+                        resolve("");
+                    } else {
+                        resolve(response.jobId);
+                    }
+                }
+            });
+
+            port.onDisconnect.addListener(() => {
+                reject("Port disconnected before receiving response.");
+            });
+        });
+    } catch {
+        return "";
+    }
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function waitForElement(elementSelector, interval, timeout) {
+    const startTime = Date.now();
+
+    function checkElementExistence() {
+        const element = document.querySelector(elementSelector);
+
+        if (!element || Date.now() - startTime > timeout) {
+            return !element;
+        } else {
+            return new Promise((resolve) => setTimeout(resolve, interval)).then(checkElementExistence);
+        }
+    }
+
+    return checkElementExistence();
+}
+
+// Gọi hàm getJobResult từ content script
+async function callGetJobResult(jobId, timeWait) {
+    try {
+        const data = JSON.stringify({
+            api_token: API_TOKEN,
+            job_id: jobId
+        });
+        return new Promise((resolve, reject) => {
+            const port = chrome.runtime.connect({ name: "content-script" });
+            port.postMessage({ type: "getJobResult", data: data, timeWait: timeWait });
+
+            port.onMessage.addListener(function (response) {
+                if (response && response.type === "getJobResultResponse") {
+                    console.log("Result:", response.result);
+                    resolve(response.result);
+                }
+            });
+
+            port.onDisconnect.addListener(() => {
+                reject("Port disconnected before receiving response.");
+            });
+        });
+    } catch {
+        return "";
+    }
+}
+
+
+function simulateDrag(element, targetX) {
+    return new Promise((resolve) => {
+        var mouseDownEvent = new MouseEvent('mousedown', { bubbles: true });
+        element.dispatchEvent(mouseDownEvent);
+
+        var moveInterval = DELAY_SWIPE;
+        var currentX = 0;
+
+        function moveMouse() {
+            currentX += 1;
+            var mouseMoveEvent = new MouseEvent('mousemove', { bubbles: true, clientX: currentX, clientY: 0 });
+            element.dispatchEvent(mouseMoveEvent);
+
+            if (currentX < targetX) {
+                setTimeout(moveMouse, moveInterval);
+            } else {
+                var mouseUpEvent = new MouseEvent('mouseup', { bubbles: true });
+                element.dispatchEvent(mouseUpEvent);
+                resolve(); // Kết thúc Promise khi quá trình kéo hoàn tất
+            }
+        }
+
+        moveMouse();
+    });
+}
+
+function simulateClick(element, offsetX, offsetY) {
+    var rect = element.getBoundingClientRect();
+    var clientX = rect.left + offsetX;
+    var clientY = rect.top + offsetY;
+    var clickEvent = new MouseEvent('click', { bubbles: true, clientX: clientX, clientY: clientY });
+    element.dispatchEvent(clickEvent);
+}
+
+let port = chrome.runtime.connect();
+async function fetchAndConvertToBase64(url) {
+    try {
+        port.postMessage({ action: "loadImage", imageUrl: url });
+        const base64 = await new Promise((resolve, reject) => {
+            port.onMessage.addListener(function (msg) {
+                resolve(msg.base64Image)
+            });
+        });
+        console.log(base64);
+        return base64;
+    } catch {
+        return "";
+    }
+
+}
