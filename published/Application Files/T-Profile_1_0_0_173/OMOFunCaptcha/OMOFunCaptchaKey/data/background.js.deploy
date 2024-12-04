@@ -1,0 +1,149 @@
+const bapi = {
+    register_language: () => {
+        chrome.declarativeNetRequest.updateDynamicRules({
+            addRules: [{
+                id: 1,
+                priority: 1,
+                action: {
+                    type: "redirect",
+                    redirect: {
+                        transform: {
+                            queryTransform: {
+                                addOrReplaceParams: [{
+                                    key: "hl",
+                                    value: "en-US"
+                                }]
+                            }
+                        }
+                    }
+                },
+                condition: {
+                    regexFilter: "^(http|https)://[^\\.]*\\.(google\\.com|recaptcha\\.net)/recaptcha",
+                    resourceTypes: ["sub_frame"]
+                }
+            }, {
+                id: 2,
+                priority: 1,
+                action: {
+                    type: "redirect",
+                    redirect: {
+                        transform: {
+                            queryTransform: {
+                                addOrReplaceParams: [{
+                                    key: "lang",
+                                    value: "en"
+                                }]
+                            }
+                        }
+                    }
+                },
+                condition: {
+                    regexFilter: "^(http|https)://[^\\.]*\\.(funcaptcha\\.(co|com)|arkoselabs\\.(com|cn)|arkose\\.com\\.cn)",
+                    resourceTypes: ["sub_frame"]
+                }
+            }],
+            removeRuleIds: [1, 2]
+        })
+    }
+};
+
+bapi.register_language()
+
+//////////////////////////////////////////////////////////////////////////////
+chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+    if (request.type === "createJob") {
+        createJob(request.data, sendResponse);
+        return true; // Trả về true để báo hiệu rằng sendResponse sẽ được gọi sau khi xử lý yêu cầu
+    } else if (request.type === "getJobResult") {
+        getJobResult(request.data, request.timeWait, sendResponse);
+        return true; // Trả về true để báo hiệu rằng sendResponse sẽ được gọi sau khi xử lý yêu cầu
+    } else if (request.type === "dowloadImageToBase64") {
+        dowloadImageToBase64(request.url, sendResponse);
+        return true; // Trả về true để báo hiệu rằng sendResponse sẽ được gọi sau khi xử lý yêu cầu
+    }
+});
+
+async function createJob(data, sendResponse) {
+    try {
+        const url = "https://omocaptcha.com/api/createJob";
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: data
+        });
+        const json = await response.json();
+        if (json.error) {
+            sendResponse(""); // Gửi phản hồi trống nếu có lỗi
+        } else {
+            sendResponse(json.job_id.toString()); // Gửi job_id nếu không có lỗi
+        }
+    } catch  {
+        sendResponse(""); // Gửi phản hồi trống nếu có lỗi
+    }
+}
+
+async function getJobResult(data, timeWait, sendResponse) {
+    try {
+        const url = "https://omocaptcha.com/api/getJobResult";
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        const timeStart = Date.now();
+        while (Date.now() - timeStart <= timeWait * 1000) {
+            try {
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: data
+                });
+
+                if (response.status === 500) {
+                    sendResponse("Server 500");
+                    return;
+                }
+
+                const json = await response.json();
+
+                if (!json.error) {
+                    const status = json.status.toString();
+                    if (status === "success") {
+                        sendResponse(json.result.toString());
+                        return;
+                    } else if (status === "fail") {
+                        sendResponse("");
+                        return;
+                    }
+                }
+
+            } catch {
+                sendResponse("");
+                return;
+            }
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        sendResponse("");
+    } catch {
+        sendResponse("");
+    }
+}
+
+async function dowloadImageToBase64(url, sendResponse) {
+    try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const reader = new FileReader();
+        var base64 = new Promise((resolve, reject) => {
+            reader.onload = () => {
+                resolve(reader.result.split(',')[1]);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+        sendResponse(base64);
+    } catch {
+        sendResponse("");
+    }
+}

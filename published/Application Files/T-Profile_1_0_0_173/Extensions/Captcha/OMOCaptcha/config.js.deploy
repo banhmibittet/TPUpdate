@@ -1,0 +1,3 @@
+var API_TOKEN = "apitokenlkjbtceilicco7mjmljfnxyml6y4elotucntuggdoraiwrl9w5ml0wfo7a5bjz1716269920"; // Api token trên web
+var DELAY_CLICK = 50; // Khoảng cách click
+var LOOP = true; // Để true sẽ giải đến khi thành công
